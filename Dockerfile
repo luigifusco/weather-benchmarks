@@ -10,8 +10,8 @@ RUN dnf install -y \
     git \
     wget \
     && dnf clean all
-RUN dnf install -y epel-release dnf-plugins-core && \
-    dnf --enablerepo=powertools install -y netcdf-devel-4.7.0-3.el8.x86_64
+# RUN dnf install -y epel-release dnf-plugins-core && \
+#     dnf --enablerepo=powertools install -y netcdf-devel-4.7.0-3.el8.x86_64
 
 # Set working directory
 WORKDIR /workspace
@@ -30,13 +30,18 @@ RUN ctest -S HDF5config.cmake,BUILD_GENERATOR=Unix -C Release -VV -O hdf5.log
 RUN sed -i 's/cpack_skip_license=FALSE/cpack_skip_license=TRUE/' build/HDF5-1.14.4.3-Linux.sh
 RUN build/HDF5-1.14.4.3-Linux.sh
 RUN wget https://github.com/facebook/zstd/archive/refs/tags/v1.5.6.tar.gz && tar -xvf v1.5.6.tar.gz && rm -f v1.5.6.tar.gz \
-    && cd zstd-1.5.6 && make
+    && cd zstd-1.5.6 && cd lib && cmake ../build/cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make
 RUN wget https://github.com/uclouvain/openjpeg/archive/refs/tags/v2.5.2.tar.gz && tar -xvf v2.5.2.tar.gz && rm -f v2.5.2.tar.gz \
-    && cd openjpeg-2.5.2 && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
+    && cd openjpeg-2.5.2 && mkdir build && cd build && cmake .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release && make
 RUN git clone https://github.com/rafat/wavelib.git && cd wavelib && git reset --hard a92456d2e20451772dd76c2a0a3368537ee94184 \
     && mkdir build && cd build && cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON .. && make
 
 RUN git clone https://github.com/luigifusco/compression-filter.git && cd compression-filter/src \
-    && CPATH=/workspace/HDF_Group/HDF5/1.14.4.3/include/:/workspace/zstd-1.5.6/lib/:/workspace/openjpeg-2.5.2/src/lib/openjp2/:/workspace/openjpeg-2.5.2/build/src/lib/openjp2/:/workspace/wavelib/header \
-    LIBRARY_PATH=/workspace/wavelib/build/Bin/:/workspace/openjpeg-2.5.2/build/bin/:/workspace/zstd-1.5.6/lib/ gcc -Wall -g -O2 -shared -fPIC -o libh5z_j2k.so -lzstd -lopenjp2 h5z_j2k.c
+        && CPATH=/workspace/HDF_Group/HDF5/1.14.4.3/include/:/workspace/zstd-1.5.6/lib/:/workspace/openjpeg-2.5.2/src/lib/openjp2/:/workspace/openjpeg-2.5.2/build/src/lib/openjp2/:/workspace/wavelib/header \
+        gcc -Wall -g -O2 -shared -fPIC -o libh5z_j2k.so h5z_j2k.c /workspace/openjpeg-2.5.2/build/bin/libopenjp2.a /workspace/wavelib/build/Bin/libwavelib.a /workspace/zstd-1.5.6/lib/lib/libzstd.a
+
+RUN /opt/python/cp39-cp39/bin/pip install h5py matplotlib
+
+RUN cd compression-filter && /opt/python/cp39-cp39/bin/python test.py
+
 CMD ["/bin/bash"]
