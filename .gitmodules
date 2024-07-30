@@ -1,0 +1,6 @@
+[submodule "compression-filter"]
+	path = compression-filter
+	url = https://github.com/luigifusco/compression-filter.git
+[submodule "earth2mip"]
+	path = earth2mip
+	url = https://github.com/NVIDIA/earth2mip.git
