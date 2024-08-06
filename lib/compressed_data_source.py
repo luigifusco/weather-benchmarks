@@ -16,6 +16,17 @@ MAPPING = {
     'msl': 'mean_sea_level_pressure',
     'u10m': '10m_u_component_of_wind',
     'v10m': '10m_v_component_of_wind',
+    'z': 'geopotential',
+    'w': 'vertical_velocity',
+    'r': None,
+    'u100m': None,
+    'v100m': None,
+    'sp': 'surface_pressure',
+    'tp': 'total_precipitation',
+    'tp06': None,
+    'tisr': 'toa_incident_solar_radiation',
+    'zs': 'geopotential_at_surface',
+    'lsm': 'land_sea_mask'
 }
 
 class CompressedWrapper:
@@ -30,7 +41,7 @@ class CompressedWrapper:
         return self.base.__getattr__(attr)
 
 
-class CompressedSource(base.DataSource):
+class ZarrSource(base.DataSource):
 
     grid: grid.LatLonGrid
     
@@ -49,27 +60,16 @@ class CompressedSource(base.DataSource):
     def __getitem__(self, time: datetime.datetime):
         arrays = []
         for short_name in self.channel_names:
-
-            # Extract the alphabetic part and numerical part of the short name
-            import re
-            match = re.match(r'([a-zA-Z]+)(\d*)', short_name)
-
-            variable_type, index = match.groups()
-
-            # Get the corresponding long name
-            long_name = MAPPING[variable_type]
-
-            # Select the correct data variable
-            data_var = self.d[long_name]
-
-            # If an index (level) is specified, select the appropriate level
-            if index:
-                level = int(index)
-                data = data_var.sel(level=level, time=time).drop('level')
+            if short_name in MAPPING:
+                long_name = MAPPING[short_name]
+                data = self.d[long_name].sel(time=time)
             else:
-                data = data_var.sel(time=time)
-            
+                variable_type, index = short_name[0], short_name[1:]
+
+                long_name = MAPPING[variable_type]
+                level = int(index)
+                data = self.d[long_name].sel(level=level, time=time).drop('level')
+                
             arrays.append(data)
         
-        # return arrays
         return xr.concat(arrays, 'channel').assign_coords(channel=self.channel_names)
