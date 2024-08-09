@@ -34,20 +34,28 @@ class CompressedWrapper:
         self.filter = filter
         self.base = base
     def __getitem__(self, time: datetime.datetime):
-        arr = np.array(self.base[time], dtype=np.float32)
-        encoded = self.filter.encode(arr.tobytes())
-        return self.filter.decode(encoded, arr)
+        composite_array = self.base[time].values.astype(np.float32)
+        for arr in composite_array:
+            encoded = self.filter.encode(arr.tobytes())
+            self.filter.decode(encoded, arr)
+
+        return composite_array
+            
     def __getattr__(self, attr):
-        return self.base.__getattr__(attr)
+        return self.base.__getattribute__(attr)
 
 
 class ZarrSource(base.DataSource):
+    """
+    Reads data from a zarr file, expecting the format used by weatherbench2
+    """
 
     grid: grid.LatLonGrid
     
-    def __init__(self, channel_names):
+    def __init__(self, channel_names, source='gs://weatherbench2/datasets/era5/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2'):
         self._channel_names = channel_names
-        self.d = xr.open_zarr('gs://weatherbench2/datasets/era5/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2')
+        self.d = xr.open_zarr(source)
+        # self.climatology = xr.open_zarr('gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_1440x721.zarr')
 
     @property
     def channel_names(self):
@@ -56,20 +64,27 @@ class ZarrSource(base.DataSource):
     @property
     def grid(self):
         return grid.equiangular_lat_lon_grid(721, 1440)
+    
+    def _get_var(self, time, short_name, dataset):
+        if short_name in MAPPING:
+            long_name = MAPPING[short_name]
+            data = dataset[long_name].sel(time=time)
+        else:
+            variable_type, index = short_name[0], short_name[1:]
+
+            long_name = MAPPING[variable_type]
+            level = int(index)
+            data = dataset[long_name].sel(level=level, time=time).drop('level')
+        
+        return data
 
     def __getitem__(self, time: datetime.datetime):
         arrays = []
         for short_name in self.channel_names:
-            if short_name in MAPPING:
-                long_name = MAPPING[short_name]
-                data = self.d[long_name].sel(time=time)
-            else:
-                variable_type, index = short_name[0], short_name[1:]
-
-                long_name = MAPPING[variable_type]
-                level = int(index)
-                data = self.d[long_name].sel(level=level, time=time).drop('level')
-                
-            arrays.append(data)
+            arrays.append(self._get_var(time, short_name, self.d))
         
         return xr.concat(arrays, 'channel').assign_coords(channel=self.channel_names)
+
+    @property
+    def time_means(self):
+        return np.zeros((len(self.channel_names), 721, 1440))
