@@ -4,6 +4,7 @@ import datetime
 import xarray as xr
 from zarr_filter import J2KFilter
 import numpy as np
+from pysz import SZ
 
 MAPPING = {
     't': 'temperature',
@@ -23,11 +24,23 @@ MAPPING = {
     'v100m': None,
     'sp': 'surface_pressure',
     'tp': 'total_precipitation',
-    'tp06': None,
+    'tp06': 'total_precipitation',
     'tisr': 'toa_incident_solar_radiation',
     'zs': 'geopotential_at_surface',
     'lsm': 'land_sea_mask'
 }
+
+class SZWrapper:
+    def __init__(self, err):
+        self.SZ = SZ()
+        self.err = err
+
+    def encode(self, b):
+        data, ratio = self.SZ.compress(b, 0, self.err, 0, 0)
+        return data
+    
+    def decode(self, b, out):
+        out[:] = self.SZ.decompress(b, out.shape, out.dtype)
 
 class CompressedWrapper:
     def __init__(self, base, filter):
@@ -36,11 +49,11 @@ class CompressedWrapper:
     def __getitem__(self, time: datetime.datetime):
         composite_array = self.base[time].values.astype(np.float32)
         for arr in composite_array:
-            encoded = self.filter.encode(arr.tobytes())
+            encoded = self.filter.encode(arr)
             self.filter.decode(encoded, arr)
 
         return composite_array
-            
+
     def __getattr__(self, attr):
         return self.base.__getattribute__(attr)
 
