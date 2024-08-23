@@ -35,7 +35,7 @@ for model, model_name in time_loops:
     print(f'testing {model_name}:', model.in_channel_names, '->', model.out_channel_names)
     sys.stdout.flush()
 
-    validation_data_source = ZarrSource(model.out_channel_names, '../data/january.zarr')
+    validation_data_source = ZarrSource(model.out_channel_names, '/store/ERA5/weatherbench2_original')
     for ratio in compression_ratios:
         print('testing with compression ratio of', ratio)
         sys.stdout.flush()
